@@ -1,0 +1,9 @@
+[package]
+name = "sdwan"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.7", features = ["derive"] }
+pcap = "2.0.0"
