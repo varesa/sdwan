@@ -1,6 +1,8 @@
 use clap::Parser;
 use std::sync::mpsc;
+use std::time::Duration;
 
+mod analyzer;
 mod capture;
 
 #[derive(Parser, Debug)]
@@ -12,19 +14,23 @@ struct Args {
 
 fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
-    let capture = capture::Capture::try_open(&args.interface)?;
-
     let (tx, rx) = mpsc::channel();
 
+    let capture = capture::Capture::try_open(&args.interface)?;
     std::thread::spawn(|| {
-        let res = capture.start(tx);
+        let res = capture.run_blocking(tx);
         eprintln!("Capture thread exited with: {:?}", res);
         std::process::exit(1);
     });
 
-    while let Ok(meta) = rx.recv() {
-        println!("Received: {:?}", meta);
-    }
+    let analyzer = analyzer::Analyzer::from_channel(rx);
+    std::thread::spawn(|| {
+        let res = analyzer.run_blocking();
+        eprintln!("Analyzer thread exited with: {:?}", res);
+        std::process::exit(1);
+    });
 
-    Ok(())
+    loop {
+        std::thread::sleep(Duration::from_secs(1));
+    }
 }

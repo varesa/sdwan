@@ -1,8 +1,9 @@
-use etherparse::{LaxNetSlice, LaxSlicedPacket, TransportSlice};
 use mpsc::Sender;
-use pcap::{Device, Direction, Error, Packet};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::mpsc;
+
+use etherparse::{LaxNetSlice, LaxSlicedPacket, TransportSlice};
+use pcap::{Device, Error};
 
 pub struct Capture {
     device: Device,
@@ -32,6 +33,32 @@ pub enum PacketMeta {
     Ipv6(Ipv6Meta),
 }
 
+impl PacketMeta {
+    pub fn flow_tuple(&self) -> (String, Option<u16>, String, Option<u16>) {
+        match self {
+            PacketMeta::Ipv4(ipv4) => (
+                ipv4.source_address.to_string(),
+                ipv4.source_port,
+                ipv4.destination_address.to_string(),
+                ipv4.destination_port,
+            ),
+            PacketMeta::Ipv6(ipv6) => (
+                ipv6.source_address.to_string(),
+                ipv6.source_port,
+                ipv6.destination_address.to_string(),
+                ipv6.destination_port,
+            ),
+        }
+    }
+
+    pub fn size(&self) -> u32 {
+        match self {
+            PacketMeta::Ipv4(ipv4) => ipv4.length,
+            PacketMeta::Ipv6(ipv6) => ipv6.length,
+        }
+    }
+}
+
 impl Capture {
     pub fn try_open(interface: &str) -> Result<Self, anyhow::Error> {
         let devices = Device::list()?;
@@ -47,7 +74,7 @@ impl Capture {
         Ok(capture)
     }
 
-    pub fn start(self, tx: Sender<PacketMeta>) -> Result<(), anyhow::Error> {
+    pub fn run_blocking(self, tx: Sender<PacketMeta>) -> Result<(), anyhow::Error> {
         let mut cap = pcap::Capture::from_device(self.device)?
             .immediate_mode(true)
             .snaplen(100)
